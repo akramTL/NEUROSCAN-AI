@@ -35,6 +35,8 @@ frontend/.vite/
 # Uploads & model artifacts
 backend/uploads/
 *.pkl
+!backend/model/*.pkl
+!backend/model/*.pth
 
 # Database
 *.db

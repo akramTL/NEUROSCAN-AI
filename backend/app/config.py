@@ -20,15 +20,15 @@ class Settings(BaseSettings):
 
     # File storage
     UPLOAD_DIR: str = "./uploads"
-    MAX_FILE_SIZE_MB: int = 50
+    MAX_FILE_SIZE_MB: int = 100
 
     # CORS – stored as a comma-separated string in .env, parsed into a list here
     ALLOWED_ORIGINS: str = "http://localhost:5173"
 
     # AI model backend
-    MODEL_BACKEND: str = "stub"           # 'stub' | 'local'
+    MODEL_BACKEND: str = "local"           # 'stub' | 'local'
     MODEL_PATH: str = "./model/model.pkl"  # path to model.pkl when MODEL_BACKEND=local
-    MRI_MODEL_PATH: str = "./model/mri_model.pth"  # PyTorch MRI model
+    MRI_MODEL_PATH: str = "./model/model_v2_bal0.7724_ep1.pth"  # PyTorch MRI model
     MODEL_API_URL: str | None = None       # reserved for future remote model API
 
     @property

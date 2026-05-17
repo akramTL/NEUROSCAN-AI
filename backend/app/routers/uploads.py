@@ -1,3 +1,7 @@
+# NOTE: File storage is ephemeral on Railway free tier.
+# For production clinical use, replace UPLOAD_DIR with
+# an S3-compatible storage (AWS S3, Cloudflare R2, Backblaze B2).
+# Current setup is suitable for demonstration purposes.
 from __future__ import annotations
 
 import shutil
