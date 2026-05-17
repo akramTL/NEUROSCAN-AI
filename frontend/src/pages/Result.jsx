@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, AlertTriangle, RefreshCw, CheckCircle2, AlertCircle, Download, Circle, Loader2, XCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { getAnalysisStatus, getAnalysis } from '../api/api'
+import { getAnalysisStatus, getAnalysis, downloadReport } from '../api/api'
 import { useToast } from '../context/ToastContext'
 import GlassCard from '../components/GlassCard'
 
@@ -35,7 +35,7 @@ const FEATURE_LABELS = {
 }
 
 // ── Confidence bar ────────────────────────────────────────────
-function ConfidenceSection({ score }) {
+function ConfidenceSection({ score, isMRI }) {
   const [width, setWidth] = useState('0%')
   useEffect(() => {
     const t = setTimeout(() => setWidth(`${(score * 100).toFixed(1)}%`), 50)
@@ -51,7 +51,9 @@ function ConfidenceSection({ score }) {
       <div className="progress-track" style={{ height: 10 }}>
         <div className="progress-fill-accent" style={{ width }} />
       </div>
-      <p style={{ fontSize: 12, color: '#475569', marginTop: 6 }}>Based on XGBoost biomarker analysis</p>
+      <p style={{ fontSize: 12, color: '#475569', marginTop: 6 }}>
+        {isMRI ? 'Based on 3D MRI deep learning analysis' : 'Based on XGBoost biomarker analysis'}
+      </p>
     </div>
   )
 }
@@ -75,6 +77,8 @@ function FeatureImportance({ featureImportance }) {
   const { showFeatureImportance = true } = JSON.parse(localStorage.getItem('neuroscan_settings') || '{}')
   if (!showFeatureImportance) return null
 
+  const isMRI = 'CN' in featureImportance || 'MCI' in featureImportance || 'AD' in featureImportance
+
   const data = Object.entries(featureImportance)
     .map(([key, value]) => ({ name: FEATURE_LABELS[key] ?? key, value }))
     .sort((a, b) => b.value - a.value)
@@ -84,7 +88,9 @@ function FeatureImportance({ featureImportance }) {
 
   return (
     <div>
-      <p style={{ fontSize: 14, fontWeight: 700, color: '#F1F5F9', margin: '20px 0 12px' }}>What drove this result</p>
+      <p style={{ fontSize: 14, fontWeight: 700, color: '#F1F5F9', margin: '20px 0 12px' }}>
+        {isMRI ? 'Per-class MRI probabilities' : 'What drove this result'}
+      </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {data.map(({ name, value }, i) => {
           const pct = `${((value / maxVal) * 100).toFixed(0)}%`
@@ -191,6 +197,7 @@ function AnalysisFailed({ analysis }) {
 // ── Completed result ──────────────────────────────────────────
 function ResultCard({ data, analysis }) {
   const { showToast } = useToast()
+  const [downloading, setDownloading] = useState(false)
   const cfg = RESULT_CONFIG[data.result]
   if (!cfg) return null
   const Icon = cfg.icon
@@ -199,6 +206,25 @@ function ResultCard({ data, analysis }) {
   useEffect(() => {
     showToast(`Result: ${data.result} — ${cfg.label}`, 'info', 'Analysis complete')
   }, [])
+
+  const handleDownload = async () => {
+    setDownloading(true)
+    try {
+      const blob = await downloadReport(analysis.id)
+      const url  = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }))
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `neuroscan-report-${String(analysis.id).slice(0, 8)}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch {
+      showToast('Failed to generate report', 'error', 'Download error')
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto' }}>
@@ -233,7 +259,12 @@ function ResultCard({ data, analysis }) {
 
         <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '24px 0' }} />
 
-        {pct != null && <ConfidenceSection score={pct} />}
+        {pct != null && (
+          <ConfidenceSection
+            score={pct}
+            isMRI={!!(analysis?.feature_importance && ('CN' in analysis.feature_importance || 'MCI' in analysis.feature_importance))}
+          />
+        )}
 
         {analysis?.feature_importance && <FeatureImportance featureImportance={analysis.feature_importance} />}
 
@@ -249,11 +280,14 @@ function ResultCard({ data, analysis }) {
           </Link>
           <button
             className="btn-primary"
-            style={{ flex: 1, justifyContent: 'center', opacity: 0.5, cursor: 'not-allowed' }}
-            disabled title="Coming soon"
+            style={{ flex: 1, justifyContent: 'center', opacity: downloading ? 0.7 : 1 }}
+            onClick={handleDownload}
+            disabled={downloading}
           >
-            <Download size={15} />
-            Report (coming soon)
+            {downloading
+              ? <Loader2 size={15} className="spin" />
+              : <Download size={15} />}
+            {downloading ? 'Generating…' : 'Download Report'}
           </button>
         </div>
       </GlassCard>

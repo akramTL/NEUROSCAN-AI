@@ -8,16 +8,17 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
-import { getAnalyses } from '../api/api'
+import { getAnalyses, getUnreadCount } from '../api/api'
 import ParticleBackground from './ParticleBackground'
 import GlowOrbs from './GlowOrbs'
 import SettingsModal, { loadSettings, applySettings } from './SettingsModal'
+import NotificationsDropdown from './NotificationsDropdown'
 
 const NAV = [
   { to: '/',         icon: LayoutDashboard, label: 'Dashboard', exact: true  },
   { to: '/patients', icon: Users,           label: 'Patients',  exact: false },
   { to: '/patients', icon: Upload,          label: 'Upload',    exact: false, href: '/patients?action=analyze' },
-  { to: '/analysis', icon: BarChart2,       label: 'Analyses',  exact: false },
+  { to: '/analyses', icon: BarChart2,       label: 'Analyses',  exact: true  },
 ]
 
 function getGreeting() {
@@ -168,9 +169,11 @@ export default function Layout() {
   const location   = useLocation()
   const navigate   = useNavigate()
   const [profileOpen,  setProfileOpen]  = useState(false)
+  const [notifOpen,    setNotifOpen]    = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settings, setSettings] = useState(loadSettings)
   const profileRef = useRef(null)
+  const notifRef   = useRef(null)
 
   // Apply saved settings on mount (accent color, etc.)
   useEffect(() => {
@@ -183,9 +186,12 @@ export default function Layout() {
     staleTime: 30_000,
   })
 
-  const pendingCount = analyses.filter(
-    a => a.status === 'pending' || a.status === 'processing'
-  ).length
+  const { data: notifCountData } = useQuery({
+    queryKey: ['notifications-count'],
+    queryFn:  getUnreadCount,
+    refetchInterval: 30_000,
+  })
+  const unreadCount = notifCountData?.count ?? 0
 
   const isActive = ({ to, exact }) =>
     exact ? location.pathname === to : location.pathname.startsWith(to)
@@ -215,6 +221,28 @@ export default function Layout() {
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
   }, [profileOpen])
+
+  // Close notifications on outside click
+  useEffect(() => {
+    if (!notifOpen) return
+    function handleClick(e) {
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setNotifOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [notifOpen])
+
+  // Close notifications on Escape
+  useEffect(() => {
+    if (!notifOpen) return
+    function handleKey(e) {
+      if (e.key === 'Escape') setNotifOpen(false)
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [notifOpen])
 
   const handleLogout = () => {
     setProfileOpen(false)
@@ -386,33 +414,52 @@ export default function Layout() {
 
           {/* Right actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <motion.button
-              style={{
-                width: 40, height: 40, borderRadius: '50%',
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                backdropFilter: 'blur(20px)',
-                cursor: 'pointer', display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
-                position: 'relative',
-              }}
-              whileHover={{ background: 'rgba(99,102,241,0.12)', borderColor: 'rgba(99,102,241,0.3)', scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <Bell size={16} style={{ color: '#94A3B8' }} />
-              {pendingCount > 0 && (
-                <motion.span
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  style={{
-                    position: 'absolute', top: 8, right: 8,
-                    width: 8, height: 8, borderRadius: '50%',
-                    background: '#EF4444',
-                    boxShadow: '0 0 8px rgba(239,68,68,0.6)',
-                  }}
-                />
-              )}
-            </motion.button>
+            <div ref={notifRef} style={{ position: 'relative' }}>
+              <motion.button
+                onClick={() => setNotifOpen(v => !v)}
+                style={{
+                  width: 40, height: 40, borderRadius: '50%',
+                  background: notifOpen ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)',
+                  border: notifOpen ? '1px solid rgba(99,102,241,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                  backdropFilter: 'blur(20px)',
+                  cursor: 'pointer', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center',
+                  position: 'relative',
+                }}
+                whileHover={{ background: 'rgba(99,102,241,0.12)', borderColor: 'rgba(99,102,241,0.3)', scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Bell size={16} style={{ color: notifOpen ? '#818CF8' : '#94A3B8' }} />
+                <AnimatePresence>
+                  {unreadCount > 0 && (
+                    <motion.span
+                      key="badge"
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0 }}
+                      style={{
+                        position: 'absolute', top: -3, right: -3,
+                        minWidth: 16, height: 16, borderRadius: 9999,
+                        background: '#6366F1',
+                        boxShadow: '0 0 8px rgba(99,102,241,0.7)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 9, fontWeight: 700, color: '#fff',
+                        padding: '0 3px',
+                        border: '1.5px solid #080B14',
+                      }}
+                    >
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </motion.button>
+
+              <AnimatePresence>
+                {notifOpen && (
+                  <NotificationsDropdown onClose={() => setNotifOpen(false)} />
+                )}
+              </AnimatePresence>
+            </div>
 
             <motion.div
               style={{

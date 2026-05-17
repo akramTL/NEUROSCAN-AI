@@ -10,7 +10,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from app.config import settings
-from app.routers import patients, uploads, analysis
+from app.routers import patients, uploads, analysis, notifications
 from app.routers.auth import router as auth_router
 
 logging.basicConfig(level=logging.INFO)
@@ -51,6 +51,7 @@ app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(patients.router, prefix="/api/v1/patients", tags=["Patients"])
 app.include_router(uploads.router, prefix="/api/v1/patients", tags=["Uploads"])
 app.include_router(analysis.router, prefix="/api/v1/analysis", tags=["Analysis"])
+app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["Notifications"])
 
 
 @app.exception_handler(Exception)

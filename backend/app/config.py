@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     # AI model backend
     MODEL_BACKEND: str = "stub"           # 'stub' | 'local'
     MODEL_PATH: str = "./model/model.pkl"  # path to model.pkl when MODEL_BACKEND=local
+    MRI_MODEL_PATH: str = "./model/mri_model.pth"  # PyTorch MRI model
     MODEL_API_URL: str | None = None       # reserved for future remote model API
 
     @property

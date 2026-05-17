@@ -7,6 +7,7 @@ import Patients from './pages/Patients'
 import PatientDetail from './pages/PatientDetail'
 import Upload from './pages/Upload'
 import Result from './pages/Result'
+import Analyses from './pages/Analyses'
 import Login from './pages/Login'
 import Register from './pages/Register'
 
@@ -45,6 +46,7 @@ export default function App() {
               <Route path="patients" element={<Patients />} />
               <Route path="patients/:id" element={<PatientDetail />} />
               <Route path="patients/:id/upload" element={<Upload />} />
+              <Route path="analyses" element={<Analyses />} />
               <Route path="analysis/:id" element={<Result />} />
             </Route>
           </Route>

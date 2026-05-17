@@ -32,6 +32,8 @@ async def process_analysis(analysis_id: uuid.UUID) -> None:
         analysis.status = "processing"
         await db.commit()
 
+        notif_type: str | None = None
+
         try:
             upload_dir = Path(settings.UPLOAD_DIR)
             abs_csv_path = upload_dir / analysis.csv_file_path
@@ -39,7 +41,6 @@ async def process_analysis(analysis_id: uuid.UUID) -> None:
             if not abs_csv_path.exists():
                 raise FileNotFoundError(f"CSV not found: {abs_csv_path}")
 
-            # Load CSV into a DataFrame (offloaded to executor — pandas is blocking)
             loop = asyncio.get_running_loop()
             df: pd.DataFrame = await loop.run_in_executor(
                 None, pd.read_csv, str(abs_csv_path)
@@ -60,12 +61,46 @@ async def process_analysis(analysis_id: uuid.UUID) -> None:
             analysis.confidence_score = output["confidence_score"]
             analysis.feature_importance = output.get("feature_importance")
             analysis.completed_at = datetime.now(timezone.utc)
+            notif_type = "analysis_complete"
 
         except Exception as exc:
             logger.exception("process_analysis: Analysis %s failed.", analysis_id)
             analysis.status = "failed"
             analysis.error_message = f"{type(exc).__name__}: {exc}"
             analysis.completed_at = datetime.now(timezone.utc)
+            notif_type = "analysis_failed"
 
         finally:
             await db.commit()
+
+        # Create a notification for the owning doctor
+        try:
+            from app.models.notification import Notification
+            from app.models.patient import Patient
+
+            patient = await db.get(Patient, analysis.patient_id)
+            if patient and notif_type:
+                pname = f"{patient.first_name} {patient.last_name}"
+                if notif_type == "analysis_complete":
+                    title   = "Analysis complete"
+                    message = f"Result: {analysis.result} — {pname}"
+                else:
+                    title   = "Analysis failed"
+                    message = f"Processing failed for {pname}"
+
+                db.add(Notification(
+                    doctor_id   = patient.doctor_id,
+                    type        = notif_type,
+                    title       = title,
+                    message     = message,
+                    analysis_id = analysis.id,
+                    patient_id  = patient.id,
+                ))
+                await db.commit()
+                logger.info(
+                    "Notification created: %s for doctor %s", notif_type, patient.doctor_id
+                )
+        except Exception:
+            logger.exception(
+                "process_analysis: failed to create notification for analysis %s", analysis_id
+            )
